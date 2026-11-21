@@ -65,8 +65,9 @@ try {
     if (!renderer.getContext()) throw new Error('WebGL indisponible');
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, window.innerWidth < 700 ? 1.5 : 1.75));
     renderer.setSize(window.innerWidth, window.innerHeight);
-    renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.05;
+    // AgX : hautes lumières douces et noirs profonds, rendu plus photographique qu'ACES
+    renderer.toneMapping = THREE.AgXToneMapping;
+    renderer.toneMappingExposure = 1.2;
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     renderer.localClippingEnabled = true;
@@ -106,7 +107,7 @@ function poseAt(p) {
 
 // halo du studio (sRGB 0..1) : chaud sur la toiture, plus froid pour la vue technique,
 // teinté du rouge Pradervand au contact
-const HALO = { warm: [0.12, 0.10, 0.082], cool: [0.07, 0.085, 0.105], red: [0.2, 0.045, 0.055] };
+const HALO = { warm: [0.115, 0.095, 0.078], cool: [0.068, 0.082, 0.1], red: [0.15, 0.032, 0.04] };
 function haloAt(p) {
     const k = smooth(ramp(p, 0.425, 0.475) * (1 - ramp(p, 0.615, 0.67)));
     return HALO.warm.map((v, i) => lerp(v, HALO.cool[i], k));
@@ -236,6 +237,23 @@ const io = new IntersectionObserver((entries) => {
         if (entry.isIntersecting) { entry.target.classList.add('in'); io.unobserve(entry.target); }
     });
 }, { rootMargin: '0px 0px -12% 0px' });
+
+// parallaxe douce : chaque photo glisse de quelques pour cent dans son cadre (l'image
+// est agrandie de 10 %, la marge suffit). Seules les photos à l'écran sont suivies.
+const parallaxEls = new Set();
+if (!reduceMotion) {
+    const pio = new IntersectionObserver((entries) => {
+        entries.forEach(e => e.isIntersecting ? parallaxEls.add(e.target) : parallaxEls.delete(e.target));
+    }, { rootMargin: '15% 0px' });
+    document.querySelectorAll('.curtain').forEach(el => pio.observe(el));
+}
+function updateParallax() {
+    for (const fig of parallaxEls) {
+        const r = fig.getBoundingClientRect();
+        const k = Math.max(-1, Math.min(1, (r.top + r.height / 2 - view.h / 2) / (view.h / 2 + r.height / 2)));
+        fig.firstElementChild.style.translate = `0 ${(-k * r.height * 0.042).toFixed(1)}px`;
+    }
+}
 $$('.curtain, .reveal').forEach(el => io.observe(el));
 
 // ---------------------------------------------------------------- boucle
@@ -261,6 +279,7 @@ function frame(now = performance.now()) {
 
     updateChapters(p);
     updateHeader();
+    updateParallax();
     if (!renderer) return;
 
     // mode contact : la toiture neuve, accrochée à la section contact

@@ -95,7 +95,7 @@
         <h1 class="chapter__title"><span class="ln"><span>Entreprise artisanale</span></span><span class="ln ln--muted"><span>à Martigny</span></span></h1>
         <p class="chapter__lead">Depuis plus de 40 ans, Pradervand &amp; Duay SA oeuvre dans la couverture, ferblanterie et étanchéité à Martigny.</p>
         <div class="chapter__actions">
-          <a class="btn btn--red" href="#services">Découvrez nos services <span class="btn__arrow" aria-hidden="true">→</span></a>
+          <a class="btn btn--red" href="#services">Découvrez nos services <svg class="btn__arrow" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M2.5 8h10.5M9 4l4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
           <a class="btn btn--line" href="tel:+41277227088">027 722 70 88</a>
         </div>
       </article>
@@ -104,7 +104,7 @@
         <h2 class="chapter__title chapter__title--md"><span class="ln"><span>Notre histoire</span></span></h2>
         <p class="chapter__lead">Pradervand et Duay SA bénéficie de plus de 40 ans d'expérience dans les domaines de la couverture, ferblanterie, étanchéité et revêtement de façade. Notre expertise se concentre sur l'utilisation de matériaux suisses de haute qualité.</p>
         <div class="chapter__actions">
-          <a class="btn btn--line" href="#apropos">En savoir plus <span class="btn__arrow" aria-hidden="true">→</span></a>
+          <a class="btn btn--line" href="#apropos">En savoir plus <svg class="btn__arrow" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M2.5 8h10.5M9 4l4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
         </div>
       </article>
 
@@ -136,8 +136,16 @@
 
   <section class="sec services" id="services" aria-labelledby="services-title">
     <div class="wrap">
-      <h2 id="services-title" class="sr-only">Nos services</h2>
-      <article class="svc">
+      <div class="sec__head">
+        <h2 id="services-title" class="sec__title">Nos services</h2>
+        <nav class="svc-index" aria-label="Nos services">
+          <a href="#couverture">Couverture <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M2.5 8h10.5M9 4l4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
+          <a href="#ferblanterie">Ferblanterie <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M2.5 8h10.5M9 4l4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
+          <a href="#etancheite">Étanchéité <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M2.5 8h10.5M9 4l4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
+          <a href="#facade">Revêtement de Façade <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M2.5 8h10.5M9 4l4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
+        </nav>
+      </div>
+      <article class="svc" id="couverture">
         <figure class="svc__media curtain"><img src="assets/img/couverture.jpg" srcset="assets/img/couverture-sm.jpg 1000w, assets/img/couverture.jpg 960w" sizes="(max-width: 900px) 100vw, 55vw" alt="Couverture en ardoises" width="960" height="720" loading="lazy" decoding="async"></figure>
         <div class="svc__body">
           <h3>Couverture</h3>
@@ -145,7 +153,7 @@
           <p>Que vous construisiez, rénoviez ou remplacez votre toiture, notre équipe maîtrise l'ensemble des techniques et matériaux disponibles sur le marché : tuiles béton ou terre cuite, ardoises naturelles, aluminium, fibrociment ou placage métallique. Chaque solution est choisie selon au mieux vos besoins.</p>
         </div>
       </article>
-      <article class="svc svc--flip">
+      <article class="svc svc--flip" id="ferblanterie">
         <figure class="svc__media curtain"><img src="assets/img/ferblanterie.jpg" srcset="assets/img/ferblanterie-sm.jpg 1000w, assets/img/ferblanterie.jpg 1800w" sizes="(max-width: 900px) 100vw, 55vw" alt="Toiture en cuivre à joints debout" width="1800" height="1202" loading="lazy" decoding="async"></figure>
         <div class="svc__body">
           <h3>Ferblanterie</h3>
@@ -154,7 +162,7 @@
           <p>Mais notre travail ne s'arrête pas à la technique. Parce qu'une belle toiture, c'est aussi un signe de fierté.</p>
         </div>
       </article>
-      <article class="svc">
+      <article class="svc" id="etancheite">
         <figure class="svc__media curtain"><img src="assets/img/etancheite.jpg" srcset="assets/img/etancheite-sm.jpg 1000w, assets/img/etancheite.jpg 1280w" sizes="(max-width: 900px) 100vw, 55vw" alt="Toit plat avec étanchéité bitumineuse" width="1280" height="720" loading="lazy" decoding="async"></figure>
         <div class="svc__body">
           <h3>Étanchéité</h3>
@@ -163,7 +171,7 @@
           <p>Nous proposons une étanchéité bitumineuse de qualité, idéale pour les toits plats et à faible pente.</p>
         </div>
       </article>
-      <article class="svc svc--flip svc--tall">
+      <article class="svc svc--flip svc--tall" id="facade">
         <figure class="svc__media curtain"><img src="assets/img/facade.jpg" srcset="assets/img/facade-sm.jpg 1000w, assets/img/facade.jpg 1400w" sizes="(max-width: 900px) 100vw, 45vw" alt="Revêtement de façade ventilé" width="1400" height="1867" loading="lazy" decoding="async"></figure>
         <div class="svc__body">
           <h3>Revêtement de Façade</h3>

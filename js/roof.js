@@ -103,6 +103,23 @@ function slateBumpTexture() {
     }, { repeat: [3, 3] });
 }
 
+// lustre irrégulier : nuages doux de rugosité (canal vert), pour que la lumière glisse
+// sans uniformité sur la surface
+function slateRoughTexture() {
+    const rand = rng(29);
+    return canvasTexture([256, 256], (g, w, h) => {
+        g.fillStyle = 'rgb(220,220,220)'; g.fillRect(0, 0, w, h);
+        for (let i = 0; i < 70; i++) {
+            const x = rand() * w, y = rand() * h, r = 10 + rand() * 46;
+            const v = Math.round(150 + rand() * 105);
+            const grad = g.createRadialGradient(x, y, 0, x, y, r);
+            grad.addColorStop(0, `rgba(${v},${v},${v},0.55)`);
+            grad.addColorStop(1, `rgba(${v},${v},${v},0)`);
+            g.fillStyle = grad; g.fillRect(x - r, y - r, r * 2, r * 2);
+        }
+    }, { repeat: [1.3, 1.3] });
+}
+
 function woodTexture(seed, tint) {
     const rand = rng(seed);
     return canvasTexture([256, 64], (g, w, h) => {
@@ -228,40 +245,53 @@ function studioBackground() {
     return mesh;
 }
 
-function withFade(material) {
+// `shade` : GLSL facultatif qui module `outgoingLight` avant le tone mapping, avec la
+// position monde du fragment dans `vWorldP` (ombre sous les débords, chute de lumière).
+function withFade(material, shade = '', key = 'base') {
     material.onBeforeCompile = (shader) => {
         Object.assign(shader.uniforms, STUDIO);
         shader.vertexShader = shader.vertexShader
-            .replace('#include <common>', '#include <common>\nvarying float vFadeY;')
+            .replace('#include <common>', '#include <common>\nvarying vec3 vWorldP;')
             .replace('#include <project_vertex>', `#include <project_vertex>
                 vec4 fadeWP = vec4(transformed, 1.0);
                 #ifdef USE_INSTANCING
                 fadeWP = instanceMatrix * fadeWP;
                 #endif
-                vFadeY = (modelMatrix * fadeWP).y;`);
+                vWorldP = (modelMatrix * fadeWP).xyz;`);
         shader.fragmentShader = shader.fragmentShader
-            .replace('#include <common>', '#include <common>\nuniform vec2 uFade;\nvarying float vFadeY;\n' + STUDIO_GLSL)
+            .replace('#include <common>', '#include <common>\nuniform vec2 uFade;\nvarying vec3 vWorldP;\n' + STUDIO_GLSL)
+            .replace('#include <opaque_fragment>', shade + '\n#include <opaque_fragment>')
             .replace('#include <dithering_fragment>', `
-                gl_FragColor.rgb = mix(studioBg(gl_FragCoord.xy), gl_FragColor.rgb, smoothstep(uFade.x, uFade.y, vFadeY));
+                gl_FragColor.rgb = mix(studioBg(gl_FragCoord.xy), gl_FragColor.rgb, smoothstep(uFade.x, uFade.y, vWorldP.y));
                 #include <dithering_fragment>`);
     };
-    material.customProgramCacheKey = () => 'ped-fade';
+    material.customProgramCacheKey = () => 'ped-fade-' + key;
     return material;
 }
+
+// Murs : la lumière du studio tombe du haut, le volume s'assombrit vers le bas avant de
+// se fondre dans le fond ; une ombre douce court sous l'avant-toit et sous les rives.
+const WALL_SHADE = `
+    {
+        float fall = mix(0.16, 1.0, smoothstep(-2.5, 0.15, vWorldP.y));
+        float roofY = 0.18 + max(0.0, ${(R.S - R.eave).toFixed(4)} - abs(vWorldP.z)) * ${Math.tan(R.pitch).toFixed(4)};
+        float eaveAO = mix(0.42, 1.0, smoothstep(0.02, 0.62, roofY - vWorldP.y));
+        outgoingLight *= fall * eaveAO;
+    }`;
 
 // ---------------------------------------------------------------- environnement
 function studioEnvironment(renderer) {
     const studio = new THREE.Scene();
-    studio.background = new THREE.Color('#1d1c1b');
-    // studio photo : boîtes à lumière franches sur fond sombre, reflets nets
+    studio.background = new THREE.Color('#0b0b0b');
+    // studio photo de produit : fond noir, quelques boîtes à lumière étroites. Les reflets
+    // sur le métal et les ardoises deviennent des filets nets au lieu d'un voile gris.
     const panels = [
         // w, h, x, y, z, couleur, intensité
-        [9, 9, 0, 9, 0, '#fff6ea', 2.4],       // plafond lumineux
-        [5, 2.4, -7, 3, 5, '#ffe2c4', 3.2],    // boîte chaude, avant gauche
-        [1.2, 7, 7, 2, -3, '#d6e4ff', 3.0],    // bande froide, arrière droite
-        [8, 0.8, 0, 2, -8, '#ffffff', 2.6],    // liseré arrière
-        [2.4, 1.6, 6, 0.8, 6, '#ffcfa6', 1.6],
-        [12, 4, 0, -6, 0, '#0e0d0c', 1.0],     // sol noir
+        [6, 3.5, -1, 10, 1, '#fff3e6', 0.8],   // plafond diffus, décalé vers l'avant
+        [1.4, 9, -8, 3, 4, '#ffe4c8', 4.2],    // bande verticale chaude, avant gauche
+        [1.0, 9, 8, 3, -1, '#dce6ff', 3.6],    // bande verticale froide, droite
+        [11, 0.6, 0, 3.2, -9, '#ffffff', 3.2], // liseré horizontal arrière
+        [7, 0.45, 1, 1.2, 9, '#fff0e0', 2.0],  // liseré bas, avant : filet sur les rangs
     ];
     for (const [w, h, x, y, z, color, k] of panels) {
         const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h),
@@ -285,38 +315,54 @@ export function createRoof(renderer) {
     scene.add(root);
     const rand = rng(1984);
 
-    // lumières de studio : principale chaude, deux contre-jours pour détacher la silhouette
-    scene.add(new THREE.HemisphereLight('#e9e4da', '#241d18', 0.5));
-    const sun = new THREE.DirectionalLight('#ffeedc', 3.0);
-    sun.position.set(-6.5, 11, 8);
+    // lumières de studio. La principale arrive de biais, de la gauche et un peu en arrière
+    // du faîte : elle frise les pans, chaque rang d'ardoises porte son filet d'ombre et le
+    // pignon de droite reste dans la pénombre. Un débouché froid et deux contre-jours
+    // détachent la silhouette du fond.
+    scene.add(new THREE.HemisphereLight('#e6e1d8', '#16120f', 0.22));
+    // projecteur (et non soleil) : la source est proche, son reflet se pose sur une partie
+    // du pan et s'éteint en dégradé au lieu de griser toute la surface
+    const sun = new THREE.SpotLight('#fff0df', 760, 0, 0.6, 0.55, 2);
+    sun.position.set(-9.5, 10.5, 2.5);
+    sun.target.position.set(0, 0.4, 0);
     sun.castShadow = true;
     const small = Math.min(window.innerWidth, window.innerHeight) < 700;
-    sun.shadow.mapSize.set(small ? 1024 : 2048, small ? 1024 : 2048);
-    Object.assign(sun.shadow.camera, { left: -7.5, right: 7.5, top: 7.5, bottom: -7.5, near: 2, far: 32 });
-    sun.shadow.bias = -0.0004;
-    sun.shadow.normalBias = 0.018;
-    scene.add(sun);
-    const rim = new THREE.DirectionalLight('#d4e2ff', 2.6);
-    rim.position.set(7, 6, -8);
+    const shadowSize = small ? 2048 : Math.min(4096, renderer.capabilities.maxTextureSize);
+    sun.shadow.mapSize.set(shadowSize, shadowSize);
+    sun.shadow.camera.near = 6;
+    sun.shadow.camera.far = 28;
+    sun.shadow.bias = -0.0002;
+    sun.shadow.normalBias = 0.012;
+    scene.add(sun, sun.target);
+    const fill = new THREE.DirectionalLight('#cfdbf2', 0.4);
+    fill.position.set(9, 4, 7);
+    scene.add(fill);
+    const rim = new THREE.DirectionalLight('#d6e3ff', 2.4);
+    rim.position.set(6, 7, -9);
     scene.add(rim);
-    const rimWarm = new THREE.DirectionalLight('#ffd2b0', 1.3);
-    rimWarm.position.set(-8, 4, -6);
+    const rimWarm = new THREE.DirectionalLight('#ffcfa6', 1.1);
+    rimWarm.position.set(-8, 3, -7);
     scene.add(rimWarm);
 
     // matériaux
     const M = {
+        // fibrociment anthracite : satiné, avec un lustre irrégulier d'une ardoise à l'autre
         slate: withFade(new THREE.MeshPhysicalMaterial({
-            color: '#2c3035', roughness: 0.62, metalness: 0, clearcoat: 0.2, clearcoatRoughness: 0.45,
-            bumpMap: slateBumpTexture(), bumpScale: 0.8, envMapIntensity: 1.0 })),
-        hook: withFade(new THREE.MeshStandardMaterial({ color: '#141516', roughness: 0.4, metalness: 0.6 })),
+            color: '#2a2e33', roughness: 0.36, roughnessMap: slateRoughTexture(), metalness: 0,
+            clearcoat: 0.14, clearcoatRoughness: 0.34, specularIntensity: 0.45,
+            bumpMap: slateBumpTexture(), bumpScale: 0.7, envMapIntensity: 1.15 })),
+        hook: withFade(new THREE.MeshStandardMaterial({ color: '#17191b', roughness: 0.35, metalness: 0.8 })),
+        // zinc prépatiné : gris doux, très métallique, reflets en filets
         metal: withFade(new THREE.MeshStandardMaterial({
-            color: '#c4c8cb', metalness: 0.85, roughness: 0.32, envMapIntensity: 1.1 })),
-        membrane: withFade(new THREE.MeshStandardMaterial({ map: membraneTexture(), roughness: 0.6, envMapIntensity: 0.7 })),
-        batten: withFade(new THREE.MeshStandardMaterial({ map: woodTexture(7, '#d9b27a'), roughness: 0.82 })),
-        counter: withFade(new THREE.MeshStandardMaterial({ map: woodTexture(8, '#cfa36a'), roughness: 0.82 })),
-        rafter: withFade(new THREE.MeshStandardMaterial({ map: woodTexture(9, '#b98a57'), roughness: 0.8 })),
+            color: '#aab0b5', metalness: 1, roughness: 0.3, envMapIntensity: 1.25 })),
+        membrane: withFade(new THREE.MeshStandardMaterial({ map: membraneTexture(), roughness: 0.68, envMapIntensity: 0.6 })),
+        batten: withFade(new THREE.MeshStandardMaterial({ map: woodTexture(7, '#d6ad74'), roughness: 0.8 })),
+        counter: withFade(new THREE.MeshStandardMaterial({ map: woodTexture(8, '#c99d63'), roughness: 0.8 })),
+        rafter: withFade(new THREE.MeshStandardMaterial({ map: woodTexture(9, '#b3854f'), roughness: 0.78 })),
+        // crépi minéral grège : en retrait, pour laisser la toiture tenir le premier rôle
         plaster: withFade(new THREE.MeshStandardMaterial({
-            color: '#d3cfc8', roughness: 0.95, bumpMap: plasterBumpTexture(), bumpScale: 0.6 })),
+            color: '#bdb6aa', roughness: 0.96, bumpMap: plasterBumpTexture(), bumpScale: 0.5, envMapIntensity: 0.5 }),
+            WALL_SHADE, 'wall'),
     };
     const shadowed = (mesh, cast = true, receive = true) => { mesh.castShadow = cast; mesh.receiveShadow = receive; return mesh; };
     const inSlope = (side, mesh) => {
@@ -346,10 +392,11 @@ export function createRoof(renderer) {
 
     // ---------- structure : chevrons, sous-couverture, contre-lattes, lattes
     for (const side of [0, 1]) {
-        const rafterGeo = worldUV(new THREE.BoxGeometry(0.08, LS + 0.05, R.rafterDepth), 1.2);
+        // les abouts de chevrons restent derrière la planche de rive de l'avant-toit
+        const rafterGeo = worldUV(new THREE.BoxGeometry(0.08, LS - 0.02, R.rafterDepth), 1.2);
         for (let u = -R.L / 2 + 0.1; u <= R.L / 2 - 0.05; u += 0.62) {
             const m = shadowed(new THREE.Mesh(rafterGeo, M.rafter));
-            m.position.set(u, LS / 2 - 0.025, -R.rafterDepth / 2);
+            m.position.set(u, LS / 2 + 0.01, -R.rafterDepth / 2);
             root.add(inSlope(side, m));
         }
         const mem = shadowed(new THREE.Mesh(worldUV(new THREE.BoxGeometry(R.L + 0.04, LS, R.under), 1.5), M.membrane));
@@ -419,8 +466,9 @@ export function createRoof(renderer) {
         const col = new THREE.Color();
         const tiltAxis = new THREE.Vector3(1, 0, 0);
         slates.forEach((s, i) => {
-            const l = 0.9 + s.seed * 0.2;
-            slateMesh.setColorAt(i, col.setRGB(l, l, l * (1.0 + s.seed2 * 0.04)));
+            // nuances d'un lot d'ardoises : clair-obscur léger, certaines un peu plus bleutées
+            const l = 0.85 + s.seed * 0.28;
+            slateMesh.setColorAt(i, col.setRGB(l * (1 - s.seed2 * 0.02), l, l * (1 + s.seed2 * 0.06)));
             // pose : pied appuyé sur l'ardoise du rang inférieur, tête sur la latte
             const lift = R.slateT * 0.9;
             const tilt = -Math.atan2(lift, R.slateH * s.sy);
