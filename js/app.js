@@ -24,38 +24,9 @@ const cue = $('.cue');
 const progressBar = $('#progress');
 const navLinks = $$('.hd__nav a');
 
-// ---------------------------------------------------------------- préchargeur
-const loader = (() => {
-    const el = $('#loader'), fill = $('#loader-fill');
-    const start = performance.now();
-    let ready = false, readyAt = 0, shownAtReady = 0, shown = 0, done = false;
-    document.body.classList.add('is-loading');
-    function finish() {
-        if (done) return;
-        done = true;
-        fill.style.transform = 'scaleX(1)';
-        el.classList.add('is-done');
-        document.body.classList.remove('is-loading');
-        setTimeout(() => el.remove(), 1400);
-    }
-    function tick(now) {
-        if (done) return;
-        if (ready && !readyAt) { readyAt = now; shownAtReady = shown; }
-        if (readyAt) {
-            const k = Math.min(1, (now - readyAt) / 380);
-            shown = shownAtReady + (100 - shownAtReady) * (1 - Math.pow(1 - k, 3));
-        } else {
-            shown = 90 * (1 - Math.exp(-(now - start) / 1300));
-        }
-        fill.style.transform = `scaleX(${shown / 100})`;
-        if (readyAt && shown >= 99.5) { setTimeout(finish, 120); return; }
-        requestAnimationFrame(tick);
-    }
-    requestAnimationFrame(tick);
-    setTimeout(() => { ready = true; }, 12000);   // jamais bloqué
-    setTimeout(finish, 14000);
-    return { done: () => { ready = true; } };
-})();
+// Le préchargeur est géré par le petit script en ligne de index.html : il ne dépend que
+// de la police, pas de Three.js, pour que l'accueil s'affiche sans attendre la 3D.
+const isLoading = () => document.documentElement.classList.contains('is-loading');
 
 // ---------------------------------------------------------------- moteur 3D
 let renderer, camera, roof;
@@ -164,7 +135,7 @@ let activeChapter = -1;
 function updateChapters(p) {
     let on = -1;
     windows.forEach(([a, b], i) => { if (p >= a && p <= b) on = i; });
-    if (S.pastStage || document.body.classList.contains('is-loading')) on = -1;
+    if (S.pastStage || isLoading()) on = -1;
     if (on !== activeChapter) {
         activeChapter = on;
         chapters.forEach((c, i) => c.classList.toggle('is-on', i === on));
@@ -177,6 +148,17 @@ function updateChapters(p) {
     });
     cue.classList.toggle('is-off', p > 0.02);
 }
+
+// clavier : un lien atteint dans un chapitre encore caché amène la scène jusqu'à ce
+// chapitre, pour que le focus ne tombe jamais sur un élément invisible
+const chapterFocusAt = windows.map(([a, b]) => (Math.max(a, 0) + Math.min(b, 1)) / 2);
+chapters.forEach((c, i) => c.addEventListener('focusin', () => {
+    if (activeChapter === i) return;
+    const { top, len } = stageRange();
+    window.scrollTo({ top: top + chapterFocusAt[i] * len, behavior: 'auto' });
+    readScroll();
+    S.current = S.target;
+}));
 
 // en-tête : verre dépoli après l'animation, lien actif selon la section à l'écran
 const navSections = navLinks.map(a => (a.hash && a.hash !== '#top') ? $(a.hash) : null);
@@ -326,7 +308,7 @@ window.addEventListener('resize', onResize);
 readScroll();
 S.current = S.target;
 if (renderer) {
-    // premier rendu (compile les shaders) avant de lever le préchargeur
+    // premier rendu (compile les shaders), puis la scène apparaît en fondu
     const size = renderer.getDrawingBufferSize(new THREE.Vector2());
     roof.setResolution(size.x, size.y);
     roof.update(S.current, 0);
@@ -334,10 +316,9 @@ if (renderer) {
     renderer.setClearColor(COLORS.ink);
     renderer.compile(roof.scene, camera);
     renderer.render(roof.scene, camera);
+    requestAnimationFrame(() => document.documentElement.classList.add('is-3d'));
 }
 frame();
-const release = () => loader.done();
-if (document.fonts && document.fonts.ready) document.fonts.ready.then(release, release); else release();
 
 // crochets de contrôle (captures automatisées)
 window.__ped = {
